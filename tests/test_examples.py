@@ -96,6 +96,70 @@ async def test_desktop(monkeypatch: pytest.MonkeyPatch):
             assert "/fake/path/file2.txt" in content.text
 
 
+@pytest.mark.anyio
+async def test_curve_comparison_smooth():
+    """Test the smooth_curve tool"""
+    from examples.mcpserver.curve_comparison import mcp
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("smooth_curve", {"values": [1.0, 2.0, 3.0, 4.0, 5.0], "window": 3})
+        assert result == snapshot(
+            CallToolResult(
+                content=[TextContent(text="2.0"), TextContent(text="3.0"), TextContent(text="4.0")],
+                structured_content={"result": [2.0, 3.0, 4.0]},
+            )
+        )
+
+
+@pytest.mark.anyio
+async def test_curve_comparison_smooth_invalid_window():
+    """Test smooth_curve raises error for invalid window"""
+    from examples.mcpserver.curve_comparison import mcp
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("smooth_curve", {"values": [1.0, 2.0, 3.0], "window": 0})
+        assert result.is_error is True
+
+        result = await client.call_tool("smooth_curve", {"values": [1.0, 2.0], "window": 5})
+        assert result.is_error is True
+
+
+@pytest.mark.anyio
+async def test_curve_comparison_compare():
+    """Test the compare_curves tool"""
+    from examples.mcpserver.curve_comparison import mcp
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("compare_curves", {"curve1": [1.0, 2.0, 3.0], "curve2": [2.0, 3.0, 4.0]})
+        assert result == snapshot(
+            CallToolResult(
+                content=[TextContent(text='{\n  "pearson_correlation": 1.0,\n  "dtw_distance": 2.0\n}')],
+                structured_content={"pearson_correlation": 1.0, "dtw_distance": 2.0},
+            )
+        )
+
+
+@pytest.mark.anyio
+async def test_curve_comparison_compare_truncates():
+    """Test that compare_curves truncates to the shorter curve"""
+    from examples.mcpserver.curve_comparison import mcp
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("compare_curves", {"curve1": [1.0, 2.0, 3.0, 4.0], "curve2": [1.0, 2.0, 3.0]})
+        assert result.is_error is False
+        assert result.structured_content == snapshot({"pearson_correlation": 1.0, "dtw_distance": 0.0})
+
+
+@pytest.mark.anyio
+async def test_curve_comparison_compare_too_short():
+    """Test compare_curves raises error when curves are too short"""
+    from examples.mcpserver.curve_comparison import mcp
+
+    async with Client(mcp) as client:
+        result = await client.call_tool("compare_curves", {"curve1": [1.0], "curve2": [2.0, 3.0]})
+        assert result.is_error is True
+
+
 # TODO(v2): Change back to README.md when v2 is released
 @pytest.mark.parametrize("example", find_examples("README.v2.md"), ids=str)
 def test_docs_examples(example: CodeExample, eval_example: EvalExample):
